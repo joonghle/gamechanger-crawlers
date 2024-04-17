@@ -27,10 +27,11 @@ See LICENSE.md (including licensing intent - INTENT.md) and CONTRIBUTING.md
 > The following should be done in a MacOS or Linux environment (including WSL on Windows)
 1. Install Google Chrome and ChromeDriver
     - Using GUI: https://chromedriver.chromium.org/getting-started 
-    - Using Linux CLI: 
-          ```sudo apt install snapd
+    - Using Linux CLI:
+         ```shell
+          sudo apt install snapd
           sudo snap install chromium
-          ```
+         ```
     - after a successful installation you should be able to run the following from the shell:
          ```shell
          chromedriver --version
