@@ -26,7 +26,11 @@ See LICENSE.md (including licensing intent - INTENT.md) and CONTRIBUTING.md
 ## How to Setup Local Env for Development
 > The following should be done in a MacOS or Linux environment (including WSL on Windows)
 1. Install Google Chrome and ChromeDriver
-    - https://chromedriver.chromium.org/getting-started
+    - Using GUI: https://chromedriver.chromium.org/getting-started 
+    - Using Linux CLI: 
+          ```sudo apt install snapd
+          sudo snap install chromium
+          ```
     - after a successful installation you should be able to run the following from the shell:
          ```shell
          chromedriver --version
@@ -50,7 +54,7 @@ See LICENSE.md (including licensing intent - INTENT.md) and CONTRIBUTING.md
      ```shell
      conda activate gc-crawlers
      pip install --upgrade pip setuptools wheel
-     pip install -r ./docker/minimal-requirements.txt
+     pip install -r ./docker/core/minimal-requirements.txt
      ```
 6. That's it.
 
