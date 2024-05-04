@@ -26,8 +26,14 @@ See LICENSE.md (including licensing intent - INTENT.md) and CONTRIBUTING.md
 ## How to Setup Local Env for Development
 > The following should be done in a MacOS or Linux environment (including WSL on Windows)
 1. Install Google Chrome and ChromeDriver
-    - Using GUI: https://chromedriver.chromium.org/getting-started 
-    - Using Linux CLI:
+    - MacOS Terminal:
+        ```shell
+          # Install Homebrew package manager, if not installed already
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          # Install chrome driver
+          brew install chromedriver
+         ```
+    - Linux CLI:
          ```shell
           sudo apt install snapd
           sudo snap install chromium
@@ -35,6 +41,8 @@ See LICENSE.md (including licensing intent - INTENT.md) and CONTRIBUTING.md
     - after a successful installation you should be able to run the following from the shell:
          ```shell
          chromedriver --version
+         # If MacOS blocks chromedriver from running because the app cannot be verified,
+         # Settings -> Privacy & Security -> Allow Chromedriver
          ```
 2. Install Miniconda or Anaconda (Miniconda is much smaller)
     - https://docs.conda.io/en/latest/miniconda.html
