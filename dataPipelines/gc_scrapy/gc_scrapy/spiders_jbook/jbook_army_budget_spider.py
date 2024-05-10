@@ -72,6 +72,7 @@ class JBOOKArmyBudgetSpider(GCSeleniumSpider):
             year = doc_url.split('/')[5]
 
             doc_type = 'rdte' if 'rdte' in doc_url else 'procurement'
+            doc_num = ""  # Initialize doc_num as an empty string
             doc_name = doc_url.split('/')[-1].replace('.pdf', '')
             doc_name = f'{doc_type};{year};{doc_name}'
 
@@ -90,15 +91,16 @@ class JBOOKArmyBudgetSpider(GCSeleniumSpider):
                 "publication_date": year,
             }
 
-            doc_item = self.populate_doc_item(doc_name, doc_type, doc_title, year, web_url, downloadable_items, version_hash_fields, response.url, is_revoked)
+            doc_item = self.populate_doc_item(doc_name, doc_num, doc_type, doc_title, year, web_url, downloadable_items, version_hash_fields, response.url, is_revoked)
             if int(year[0:4]) >= 2014:
                 yield doc_item
 
-    def populate_doc_item(self, doc_name, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, source_page_url, is_revoked):
+    def populate_doc_item(self, doc_name, doc_num, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, source_page_url, is_revoked):
         '''
         This function provides both hardcoded and computed values for the variables
         in the imported DocItem object and returns the populated metadata object
         '''
+
         display_doc_type = doc_type.upper()
         display_source = self.data_source + " - " + self.source_title
         display_title = doc_name + ": " + doc_title
@@ -108,6 +110,7 @@ class JBOOKArmyBudgetSpider(GCSeleniumSpider):
         return DocItem(
             doc_name=doc_name,
             doc_title=self.ascii_clean(doc_title),
+            doc_num=doc_num,
             doc_type=self.ascii_clean(doc_type),
             display_doc_type=display_doc_type,
             publication_date=publication_date,
