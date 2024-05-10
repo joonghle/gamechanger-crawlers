@@ -1,17 +1,20 @@
-import argparse
-import datetime
-import json
-import logging
-import lxml.html
-import os
+import scrapy
+from scrapy import Selector
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import Select, WebDriverWait
+from selenium.webdriver import Chrome
+from selenium.common.exceptions import NoSuchElementException
 import re
-import requests
-from dataPipelines.gc_scrapy.gc_scrapy.items import DocItem
-from dataPipelines.gc_scrapy.gc_scrapy.GCSpider import GCSpider
-from dataPipelines.gc_scrapy.gc_scrapy.utils import dict_to_sha256_hex_digest
-from urllib.parse import urlparse
+import os
+from urllib.parse import urljoin, urlparse
+from datetime import datetime
 
-logging.basicConfig(level=logging.INFO)
+from dataPipelines.gc_scrapy.gc_scrapy.middleware_utils.selenium_request import SeleniumRequest
+from dataPipelines.gc_scrapy.gc_scrapy.items import DocItem
+from dataPipelines.gc_scrapy.gc_scrapy.GCSeleniumSpider import GCSeleniumSpider
+from dataPipelines.gc_scrapy.gc_scrapy.utils import dict_to_sha256_hex_digest
+# logging.basicConfig(level=logging.INFO)
 
 class GAOSpider(GCSpider):
     name = 'gao'
