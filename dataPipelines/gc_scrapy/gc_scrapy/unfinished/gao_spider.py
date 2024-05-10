@@ -5,10 +5,11 @@ import logging
 import os
 import re
 import requests
+import scrapy
 from dataPipelines.gc_scrapy.gc_scrapy.items import DocItem
 from dataPipelines.gc_scrapy.gc_scrapy.GCSpider import GCSpider
 from dataPipelines.gc_scrapy.gc_scrapy.utils import dict_to_sha256_hex_digest
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 
 logging.basicConfig(level=logging.INFO)
 
@@ -47,9 +48,10 @@ class GAOSpider(GCSpider):
 
         rows = response.css("div.gao-filter div.views-row")
         for row in rows:
-            doc_item = self.process_item(row, response.url)
-            if doc_item:
-                yield doc_item
+            doc_item_list = self.process_item(row, response.url)
+            if doc_item_list:
+                for doc_item in doc_item_list:
+                    yield doc_item
 
         next_page = params['page'] + 1
         params['page'] = next_page
@@ -66,12 +68,16 @@ class GAOSpider(GCSpider):
 
         gao_id = item.css("span.d-block::text").get().strip()
 
-        # some items have an empty d-block, e.g. d25791
-        if gao_id == "":
-            gao_id = re.findall(f"gao\.gov/products/(.*)", url, flags=re.IGNORECASE)[0]
-
-        if gao_id == "":
-            logging.error("Unable to fetch GAO ID.")
+        if not gao_id:
+            regex_result = re.findall(r"gao\.gov/products/([^\s/?]+)", url, flags=re.IGNORECASE)
+            if regex_result:
+                gao_id = regex_result[0]
+            else:
+                logging.error(f"Unable to fetch GAO ID from URL: {url}")
+                return None
+    
+        if not gao_id:
+            logging.error("GAO ID is empty after all attempts.")
             return None
 
         gao_id = self.clean_id(gao_id)
@@ -87,10 +93,10 @@ class GAOSpider(GCSpider):
         logging.info("GET %s", product_url)
 
         product_page = requests.get(product_url).content
-        product_page = response.replace(body=product_page)
+        product_selector = scrapy.Selector(text=product_page)
 
         links = []
-        versions = product_page.css("section.js-endpoint-full-report a")
+        versions = product_selector.css("section.js-endpoint-full-report a")
         for version in versions:
             version_name = version.css("::text").get().strip()
             version_url = version.attrib["href"]
@@ -99,11 +105,11 @@ class GAOSpider(GCSpider):
         topics = set()
 
         # GAO uses two sets of tags, a "topic" and zero or more "subjects"
-        primary = product_page.css("div.views-field-field-topic div a")
+        primary = product_selector.css("div.views-field-field-topic div a")
         for tag in primary:
             topics.add(tag.css("::text").get().strip())
 
-        tags = product_page.css("div.views-field-field-subject-term div span")
+        tags = product_selector.css("div.views-field-field-subject-term div span")
         for tag in tags:
             topics.add(tag.css("::text").get().strip())
 
@@ -118,36 +124,59 @@ class GAOSpider(GCSpider):
             "publication_date": published,
         }
 
-        doc_name = f"GAO;{gao_id}"
-        display_doc_type = "Report"
-        display_source = self.data_source + " - " + self.source_title
-        display_title = f"GAO {gao_id}: {title}"
-        source_fqdn = urlparse(url).netloc
-        version_hash = dict_to_sha256_hex_digest(version_hash_fields)
-
-        return DocItem(
-            doc_name=doc_name,
-            doc_title=title,
-            doc_type="GAO",
-            doc_num=gao_id,
-            display_doc_type=display_doc_type,
-            publication_date=published,
-            cac_login_required=self.cac_login_required,
-            crawler_used=self.name,
-            downloadable_items=links,
-            source_page_url=url,
-            source_fqdn=source_fqdn,
-            version_hash_raw_data=version_hash_fields,
-            version_hash=version_hash,
-            display_org=self.display_org,
-            data_source=self.data_source,
-            source_title=self.source_title,
-            display_source=display_source,
-            display_title=display_title,
-            file_ext=self.file_type,
-            is_revoked=is_revoked,
-        )
-
+        doc_items = []
+        for link in links:
+            download_url = urljoin(base_url, link["download_url"]) 
+            
+            downloadable_items = [
+                {
+                    "doc_type": "pdf",
+                    "download_url": download_url,
+                    "compression_type": None
+                }
+            ]
+    
+            version_hash_fields = {
+                "item_currency": gao_id,
+                "document_title": title,
+                "publication_date": published,
+                "download_url": download_url,  # Add download_url to version_hash_fields
+            }
+    
+            doc_name = f"GAO;{gao_id}"
+            display_doc_type = "Report"
+            display_source = self.data_source + " - " + self.source_title
+            display_title = f"GAO {gao_id}: {title}"
+            source_fqdn = urlparse(url).netloc
+            version_hash = dict_to_sha256_hex_digest(version_hash_fields)
+    
+            doc_item = DocItem(
+                doc_name=doc_name,
+                doc_title=title,
+                doc_type="GAO",
+                doc_num=gao_id,
+                display_doc_type=display_doc_type,
+                publication_date=published,
+                cac_login_required=self.cac_login_required,
+                crawler_used=self.name,
+                source_page_url=base_url,
+                source_fqdn=source_fqdn,
+                download_url=download_url,
+                downloadable_items=downloadable_items,
+                version_hash_raw_data=version_hash_fields,
+                version_hash=version_hash,
+                display_org=self.display_org,
+                data_source=self.data_source,
+                source_title=self.source_title,
+                display_source=display_source,
+                display_title=display_title,
+                file_ext=self.file_type,
+                is_revoked=is_revoked,
+            )
+            doc_items.append(doc_item)
+        
+        return doc_items
+            
     def clean_id(self, id: str) -> str:
         # NSIAD/AIMD-00-329 is nsiadaimd-00-329
         return id.replace("/", "")
