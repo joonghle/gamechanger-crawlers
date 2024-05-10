@@ -107,6 +107,9 @@ class JBOOKArmyBudgetSpider(GCSeleniumSpider):
         source_fqdn = urlparse(source_page_url).netloc
         version_hash = dict_to_sha256_hex_digest(version_hash_fields)
 
+        if not doc_num:
+            doc_num = "N/A"  # Set a default value when doc_num is empty or None
+
         return DocItem(
             doc_name=doc_name,
             doc_title=self.ascii_clean(doc_title),
