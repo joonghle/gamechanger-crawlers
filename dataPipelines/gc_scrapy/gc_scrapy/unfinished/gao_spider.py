@@ -24,10 +24,10 @@ class GAOSpider(GCSpider):
     start_urls = ['https://www.gao.gov/reports-testimonies']
     file_type = 'pdf'
 
-    def __init__(self, start_date, end_date, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super(GAOSpider, self).__init__(*args, **kwargs)
-        self.start_date = start_date
-        self.end_date = end_date
+        self.start_date = "2014-01-01"  # Hardcoded start date
+        self.end_date = datetime.datetime.now().strftime("%Y-%m-%d")  # Today's date
 
     def start_requests(self):
         start = datetime.datetime.strptime(self.start_date, "%Y-%m-%d")
