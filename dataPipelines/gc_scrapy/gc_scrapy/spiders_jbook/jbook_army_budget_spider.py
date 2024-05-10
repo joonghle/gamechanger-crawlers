@@ -9,6 +9,7 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver import Chrome
 from selenium.common.exceptions import NoSuchElementException
 import re
+import os
 from urllib.parse import urljoin, urlparse
 from datetime import datetime
 
@@ -109,6 +110,12 @@ class JBOOKArmyBudgetSpider(GCSeleniumSpider):
 
         if not doc_num:
             doc_num = "N/A"  # Set a default value when doc_num is empty or None
+
+        # Extract the folder path from the doc_url
+        folder_path = os.path.dirname(download_url)
+
+        # Create the folder structure
+        os.makedirs(folder_path, exist_ok=True)
 
         return DocItem(
             doc_name=doc_name,
