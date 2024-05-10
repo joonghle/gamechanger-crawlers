@@ -1,14 +1,16 @@
-from gc import callbacks
-from dataPipelines.gc_scrapy.gc_scrapy.GCSpider import GCSpider
-import scrapy
-from scrapy import Selector
-from urllib.parse import urljoin, urlparse
-from datetime import datetime
+import argparse
+import datetime
+import json
+import logging
+import os
 import re
+import requests
 from dataPipelines.gc_scrapy.gc_scrapy.items import DocItem
+from dataPipelines.gc_scrapy.gc_scrapy.GCSpider import GCSpider
 from dataPipelines.gc_scrapy.gc_scrapy.utils import dict_to_sha256_hex_digest
+from urllib.parse import urlparse
 
-# logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO)
 
 class GAOSpider(GCSpider):
     name = 'gao'
@@ -23,15 +25,15 @@ class GAOSpider(GCSpider):
 
     def __init__(self, *args, **kwargs):
         super(GAOSpider, self).__init__(*args, **kwargs)
-        self.start_date = "2014-01-01"  # Hardcoded start date
+        self.start_date = "2022-01-01"  # Hardcoded start date
         self.end_date = datetime.datetime.now().strftime("%Y-%m-%d")  # Today's date
 
     def start_requests(self):
         start = datetime.datetime.strptime(self.start_date, "%Y-%m-%d")
         end = datetime.datetime.strptime(self.end_date, "%Y-%m-%d")
 
-        start = round(datetime.datetime.timestamp(start))
-        end = round(datetime.datetime.timestamp(end))
+        start = round(start.timestamp())
+        end = round(end.timestamp())
 
         params = {
             "page": 0,
@@ -42,12 +44,10 @@ class GAOSpider(GCSpider):
 
     def parse(self, response):
         params = response.meta['params']
-        page = lxml.html.fromstring(response.text)
-        page.make_links_absolute(response.url)
 
-        rows = page.xpath("//div[contains(@class,'gao-filter')]//div[contains(@class,'views-row')]")
+        rows = response.css("div.gao-filter div.views-row")
         for row in rows:
-            doc_item = self.process_item(row)
+            doc_item = self.process_item(row, response.url)
             if doc_item:
                 yield doc_item
 
@@ -58,13 +58,13 @@ class GAOSpider(GCSpider):
         if len(rows) > 0:
             yield scrapy.Request(next_page_url, callback=self.parse, meta={'params': params})
 
-    def process_item(self, item):
-        link = item.xpath(".//h4[contains(@class,'c-search-result__header')]/a")[0]
-        title = link.xpath("string(.)")[0]
+    def process_item(self, item, base_url):
+        link = item.css("h4.c-search-result__header a")[0]
+        title = link.css("::text").get().strip()
         title = re.sub(r"\s+", " ", title)
-        url = link.xpath("@href")[0]
+        url = link.attrib["href"]
 
-        gao_id = item.xpath(".//span[contains(@class, 'd-block')]/text()")[0].strip()
+        gao_id = item.css("span.d-block::text").get().strip()
 
         # some items have an empty d-block, e.g. d25791
         if gao_id == "":
@@ -76,12 +76,10 @@ class GAOSpider(GCSpider):
 
         gao_id = self.clean_id(gao_id)
 
-        summary = item.xpath(
-            "string(.//div[contains(@class, 'c-search-result__summary')])"
-        ).strip()
+        summary = item.css("div.c-search-result__summary::text").get().strip()
 
-        published = item.xpath(".//span[contains(@class,'text-small')]/time/@datetime")[0]
-        released = item.xpath(".//span[contains(@class,'text-small')]/time/@datetime")[1]
+        published = item.css("span.text-small time::attr(datetime)").get()
+        released = item.css("span.text-small time::attr(datetime)").getall()[1]
 
         logging.info("%s %s %s", gao_id, title, url)
 
@@ -89,32 +87,25 @@ class GAOSpider(GCSpider):
         logging.info("GET %s", product_url)
 
         product_page = requests.get(product_url).content
-        product_page = lxml.html.fromstring(product_page)
-        product_page.make_links_absolute(product_url)
+        product_page = response.replace(body=product_page)
 
         links = []
-        versions = product_page.xpath(
-            "//section[contains(@class, 'js-endpoint-full-report')]//a"
-        )
+        versions = product_page.css("section.js-endpoint-full-report a")
         for version in versions:
-            version_name = version.xpath("string(.)").strip()
-            version_url = version.xpath("@href")[0]
+            version_name = version.css("::text").get().strip()
+            version_url = version.attrib["href"]
             links.append({"doc_type": self.file_type, "download_url": version_url, "compression_type": None})
 
         topics = set()
 
         # GAO uses two sets of tags, a "topic" and zero or more "subjects"
-        primary = product_page.xpath(
-            "//div[contains(@class,'views-field-field-topic')]/div/a"
-        )
+        primary = product_page.css("div.views-field-field-topic div a")
         for tag in primary:
-            topics.add(tag.xpath("text()")[0].strip())
+            topics.add(tag.css("::text").get().strip())
 
-        tags = product_page.xpath(
-            "//div[contains(@class,'views-field-field-subject-term')]/div/span"
-        )
+        tags = product_page.css("div.views-field-field-subject-term div span")
         for tag in tags:
-            topics.add(tag.xpath("text()")[0].strip())
+            topics.add(tag.css("::text").get().strip())
 
         # can't json serialize the set
         topics = list(topics)
