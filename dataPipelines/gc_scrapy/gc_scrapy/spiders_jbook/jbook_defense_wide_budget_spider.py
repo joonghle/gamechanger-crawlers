@@ -79,7 +79,9 @@ class JBOOKDefenseWideBudgetSpider(GCSpider):
                 doc_name = doc_name  + '_' + amendment_tag    
             year = publication_year.group()    
 
-            doc_name = f'{doc_type};{year};{doc_name}' 
+            doc_name = f'{doc_type};{year};{doc_name}'
+            
+            doc_num = doc_type  # Populate doc_num with the document URL
        
             download_url = web_url
             downloadable_items = [
@@ -96,10 +98,10 @@ class JBOOKDefenseWideBudgetSpider(GCSpider):
                 "publication_date": publication_date,
             }
 
-            doc_item = self.populate_doc_item(doc_name, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, response.url, is_revoked)
+            doc_item = self.populate_doc_item(doc_name, doc_num, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, response.url, is_revoked)
             yield doc_item
 
-    def populate_doc_item(self, doc_name, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, source_page_url, is_revoked):
+    def populate_doc_item(self, doc_name, doc_num, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, source_page_url, is_revoked):
         '''
         This function provides both hardcoded and computed values for the variables
         in the imported DocItem object and returns the populated metadata object
@@ -110,8 +112,12 @@ class JBOOKDefenseWideBudgetSpider(GCSpider):
         source_fqdn = urlparse(source_page_url).netloc
         version_hash = dict_to_sha256_hex_digest(version_hash_fields)
 
+        if not doc_num:
+            doc_num = "N/A"  # Set a default value when doc_num is empty or None
+
         return DocItem(
             doc_name=doc_name,
+            doc_num=doc_num,  # Added doc_num field
             doc_title=doc_title,
             doc_type=doc_type,
             display_doc_type=display_doc_type,
