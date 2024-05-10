@@ -249,6 +249,12 @@ class FileDownloadPipeline(MediaPipeline):
                         file_download_path = Path(self.output_dir, output_file_name)  # Path for downloaded file
                     metadata_download_path = f"{file_download_path}.metadata"  # Path for the accompanying metadata file
 
+                directory = os.path.dirname(file_download_path)
+    
+                # Check if the directory exists, and create it if it doesn't
+                if not os.path.exists(directory):
+                    os.makedirs(directory, exist_ok=True)
+
                 with open(file_download_path, "wb") as f: # Download each file to it's download path
                     try:
                         to_write = info.spider.download_response_handler(response)
