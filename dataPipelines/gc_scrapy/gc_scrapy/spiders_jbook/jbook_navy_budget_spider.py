@@ -16,29 +16,30 @@ from datetime import datetime
 from dataPipelines.gc_scrapy.gc_scrapy.middleware_utils.selenium_request import SeleniumRequest
 from dataPipelines.gc_scrapy.gc_scrapy.items import DocItem
 from dataPipelines.gc_scrapy.gc_scrapy.GCSeleniumSpider import GCSeleniumSpider
+from dataPipelines.gc_scrapy.gc_scrapy.utils import dict_to_sha256_hex_digest
 
 class JBOOKNavyBudgetSpider(GCSeleniumSpider):
     '''
-    Class defines the behavior for crawling and extracting text-based documents from the "Army Financial Management & Comptroller" site. 
+    Class defines the behavior for crawling and extracting text-based documents from the "Army Financial Management & Comptroller" site.
     This class inherits the 'GCSeleniumSpider' class from GCSeleniumSpider.py. The GCSeleniumSpider class applies Selenium settings to the standard
     parse method used in Scrapy crawlers in order to return a Selenium response instead of a standard Scrapy response.
 
     This class and its methods = the jbook_navy_budget "spider".
     '''
 
-    name = 'jbook_navy_budget' # Crawler name
-    display_org = "Unknown Source" # Level 1: GC app 'Source' filter for docs from this crawler
-    data_source = "Unknown Source" # Level 2: GC app 'Source' metadata field for docs from this crawler
-    source_title = "Unknown Source" # Level 3 filter
+    name = 'jbook_navy_budget'  # Crawler name
+    display_org = "Dept. of Defense"  # Level 1: GC app 'Source' filter for docs from this crawler
+    data_source = "Navy Financial Management & Comptroller Budget Materials"  # Level 2: GC app 'Source' metadata field for docs from this crawler
+    source_title = "Navy Budget"  # Level 3 filter
 
     cac_login_required = False
     rotate_user_agent = True
-    allowed_domains = ['secnav.navy.mil'] # Domains the spider is allowed to crawl
+    allowed_domains = ['secnav.navy.mil']  # Domains the spider is allowed to crawl
     start_urls = [
         'https://www.secnav.navy.mil/fmc/fmb/Documents/Forms/AllItems.aspx'
-    ] # URL where the spider begins crawling
+    ]  # URL where the spider begins crawling
 
-    file_type = "pdf" # Define filetype for the spider to identify.
+    file_type = "pdf"  # Define filetype for the spider to identify.
 
     @staticmethod
     def clean(text):
@@ -63,10 +64,9 @@ class JBOOKNavyBudgetSpider(GCSeleniumSpider):
                 if int(year) >= 2014:
                     yield response.follow(url=link, callback=self.parse_page, meta={"year": year})
 
-
     def parse_page(self, response):
         year = response.meta["year"]
-        
+
         pattern = r'\bvar\s+WPQ2ListData\s*=\s*\{[\s\S]*?\}\n\]'
         table_data = response.css('script::text').re_first(pattern)
         try:
@@ -78,7 +78,6 @@ class JBOOKNavyBudgetSpider(GCSeleniumSpider):
             if not doc_string[0] == '{':
                 doc_string = '{' + doc_string
             doc_dict = json.loads(doc_string)
-            
 
             doc_url = doc_dict['FileRef'].replace('\u002f', '/')
             doc_title = doc_dict['Title']
@@ -94,29 +93,54 @@ class JBOOKNavyBudgetSpider(GCSeleniumSpider):
             doc_name = doc_dict['FileLeafRef'].replace('.pdf', '')
             doc_name = f'{doc_type};{year};{doc_name}'
 
-            web_url = urljoin(response.url, doc_url)
+            download_url = urljoin(response.url, doc_url)
             downloadable_items = [
                 {
                     "doc_type": "pdf",
-                    "web_url": web_url,
+                    "download_url": download_url,
                     "compression_type": None
                 }
             ]
 
             version_hash_fields = {
-                "item_currency": downloadable_items[0]["web_url"].split('/')[-1],
+                "item_currency": downloadable_items[0]["download_url"].split('/')[-1],
                 "document_title": doc_title,
                 "publication_date": publication_date,
             }
 
-            doc_item = DocItem(
-                doc_name=doc_name,
-                doc_title=self.ascii_clean(doc_title),
-                doc_type=self.ascii_clean(doc_type),
-                publication_date=year,
-                source_page_url=response.url,
-                downloadable_items=downloadable_items,
-                version_hash_raw_data=version_hash_fields,
-                is_revoked=is_revoked,
-            )
+            doc_item = self.populate_doc_item(doc_name, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, response.url, is_revoked)
             yield doc_item
+
+    def populate_doc_item(self, doc_name, doc_type, doc_title, publication_date, download_url, downloadable_items, version_hash_fields, source_page_url, is_revoked):
+        '''
+        This function provides both hardcoded and computed values for the variables
+        in the imported DocItem object and returns the populated metadata object
+        '''
+        display_doc_type = doc_type.upper()
+        display_source = self.data_source + " - " + self.source_title
+        display_title = doc_name + ": " + doc_title
+        source_fqdn = urlparse(source_page_url).netloc
+        version_hash = dict_to_sha256_hex_digest(version_hash_fields)
+
+        return DocItem(
+            doc_name=doc_name,
+            doc_title=self.ascii_clean(doc_title),
+            doc_type=self.ascii_clean(doc_type),
+            display_doc_type=display_doc_type,
+            publication_date=publication_date,
+            cac_login_required=self.cac_login_required,
+            crawler_used=self.name,
+            downloadable_items=downloadable_items,
+            source_page_url=source_page_url,
+            source_fqdn=source_fqdn,
+            download_url=download_url,
+            version_hash_raw_data=version_hash_fields,
+            version_hash=version_hash,
+            display_org=self.display_org,
+            data_source=self.data_source,
+            source_title=self.source_title,
+            display_source=display_source,
+            display_title=display_title,
+            file_ext="pdf",
+            is_revoked=is_revoked,
+        )
